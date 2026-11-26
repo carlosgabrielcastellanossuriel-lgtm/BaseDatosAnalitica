@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using Interfaces;
+using Loaders;
 
 namespace Worker;
 
@@ -10,17 +11,20 @@ public class Worker : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly ILogger<Worker> _logger;
     private readonly IHostApplicationLifetime _lifetime;
+    private readonly CargadorDimensiones _cargador;
 
     public Worker(
         IEnumerable<IExtractor> extractores,
         IConfiguration configuration,
         ILogger<Worker> logger,
-        IHostApplicationLifetime lifetime)
+        IHostApplicationLifetime lifetime,
+        CargadorDimensiones cargador)
     {
         _extractores = extractores;
         _configuration = configuration;
         _logger = logger;
         _lifetime = lifetime;
+        _cargador = cargador;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -45,6 +49,16 @@ public class Worker : BackgroundService
             "Errores: {Errores}. Tiempo total: {Tiempo} ms.",
             resultados.Count(resultado => resultado.Error),
             cronometro.ElapsedMilliseconds);
+
+        // Carga de dimensiones; un fallo no detiene el programa.
+        try
+        {
+            await _cargador.CargarAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al cargar las dimensiones.");
+        }
 
         // El worker termina despues de una sola ejecucion.
         _lifetime.StopApplication();
